@@ -7,4 +7,4 @@ FROM eclipse-temurin:17-jre
 WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar
 EXPOSE 8081
-ENTRYPOINT ["java", "-Dserver.port=${PORT:8081}", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-Dvaadin.productionMode=true", "-Dspring.datasource.hikari.initialization-fail-timeout=-1", "-Dserver.port=${PORT:8081}", "-jar", "app.jar"]
