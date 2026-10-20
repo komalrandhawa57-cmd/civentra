@@ -1,4 +1,4 @@
-FROM maven:3.9-eclipse-temurin-17 AS build
+﻿FROM maven:3.9-eclipse-temurin-17 AS build
 WORKDIR /app
 COPY . .
 RUN mvn clean package -Pproduction -DskipTests
@@ -7,4 +7,4 @@ FROM eclipse-temurin:17-jre
 WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar
 EXPOSE 8081
-ENTRYPOINT ["java", "-Dvaadin.productionMode=true", "-Dspring.datasource.hikari.initialization-fail-timeout=-1", "-Dserver.port=${PORT:8081}", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-Dvaadin.productionMode=true", "-Dserver.port=${PORT:8081}", "-jar", "app.jar"]
