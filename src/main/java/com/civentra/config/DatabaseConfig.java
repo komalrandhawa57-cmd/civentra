@@ -9,7 +9,6 @@ import org.springframework.context.annotation.Primary;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.SQLException;
 
 @Configuration
@@ -27,7 +26,7 @@ public class DatabaseConfig {
     @Value("${civentra.db.pool.size:10}")
     private int poolSize;
 
-    @Value("${civentra.db.h2-fallback-enabled:true}")
+    @Value("${civentra.db.h2-fallback-enabled:false}")
     private boolean h2FallbackEnabled;
 
     private static volatile DataSource activeDataSource;
@@ -72,15 +71,11 @@ public class DatabaseConfig {
         return ds;
     }
 
-    /** Legacy DAOs use this bridge; it returns a connection from the initialized pool or fallback H2 connection. */
+    /** Legacy DAOs use this bridge; never switch to an empty H2 database after a pool failure. */
     public static Connection getConnection() throws SQLException {
-        if (activeDataSource != null) {
-            try {
-                return activeDataSource.getConnection();
-            } catch (SQLException e) {
-                System.err.println("CIVENTRA: Pool connection failed, returning fallback H2 connection: " + e.getMessage());
-            }
+        if (activeDataSource == null) {
+            throw new SQLException("CIVENTRA database pool is not initialized.");
         }
-        return DriverManager.getConnection("jdbc:h2:mem:civentradb;DB_CLOSE_DELAY=-1;MODE=Oracle", "sa", "");
+        return activeDataSource.getConnection();
     }
 }

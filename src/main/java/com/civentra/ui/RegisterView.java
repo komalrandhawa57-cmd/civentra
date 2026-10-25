@@ -29,6 +29,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 @AnonymousAllowed
 public class RegisterView extends VerticalLayout implements BeforeEnterObserver {
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(RegisterView.class);
+    private Notification activeNotification;
+    private boolean registrationInProgress;
 
     @Autowired(required = false)
     private AuthenticatedUser authenticatedUser;
@@ -86,22 +88,29 @@ public class RegisterView extends VerticalLayout implements BeforeEnterObserver 
         create.getStyle().set("margin-top", "12px");
         create.addClickShortcut(Key.ENTER);
         create.addClickListener(event -> {
+            if (registrationInProgress) return;
+            registrationInProgress = true;
             create.setEnabled(false);
             try {
                 if (!password.getValue().equals(confirm.getValue())) {
                     throw new IllegalArgumentException("The passwords do not match.");
                 }
                 userService.registerCitizen(fullName.getValue(), email.getValue(), phone.getValue(), password.getValue());
-                Notification.show("Account created. Sign in with your new email and password.", 4500,
-                        Notification.Position.TOP_CENTER).addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+                showFeedback("Account created. Sign in with your new email and password.", true);
                 getUI().ifPresent(ui -> ui.navigate("login"));
             } catch (Exception ex) {
-                String message = ex instanceof IllegalArgumentException && ex.getMessage() != null
-                        ? ex.getMessage() : "Could not create the account right now. Please try again later.";
+                String message = ex instanceof IllegalArgumentException || ex instanceof IllegalStateException
+                        ? ex.getMessage() : null;
+                if ("Email is already registered.".equals(message)) {
+                    message = "This email already has an account. Sign in or use a different email address.";
+                }
+                if (message == null || message.isBlank()) {
+                    message = "Account creation is temporarily unavailable. Check CIVENTRA's database connection and try again.";
+                }
                 if (!(ex instanceof IllegalArgumentException)) log.error("Registration failed due to a service error", ex);
-                Notification.show(message,
-                        4000, Notification.Position.TOP_CENTER).addThemeVariants(NotificationVariant.LUMO_ERROR);
+                showFeedback(message, false);
             } finally {
+                registrationInProgress = false;
                 create.setEnabled(true);
             }
         });
@@ -111,5 +120,11 @@ public class RegisterView extends VerticalLayout implements BeforeEnterObserver 
         footer.getStyle().set("text-align", "center").set("margin-top", "16px");
         card.add(title, subtitle, fullName, email, phone, password, confirm, create, footer);
         add(card);
+    }
+
+    private void showFeedback(String message, boolean success) {
+        if (activeNotification != null) activeNotification.close();
+        activeNotification = Notification.show(message, 4500, Notification.Position.TOP_CENTER);
+        activeNotification.addThemeVariants(success ? NotificationVariant.LUMO_SUCCESS : NotificationVariant.LUMO_ERROR);
     }
 }
