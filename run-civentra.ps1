@@ -22,11 +22,16 @@ try {
 }
 $env:CIVENTRA_DB_URL = 'jdbc:oracle:thin:@//localhost:1521/XEPDB1'
 $env:CIVENTRA_DB_USERNAME = 'CIVENTRA_USER'
-$env:CIVENTRA_DB_PASSWORD = [System.Net.NetworkCredential]::new('', $securePassword).Password
+$plainPassword = [System.Net.NetworkCredential]::new('', $securePassword).Password
+if ([string]::IsNullOrWhiteSpace($plainPassword)) {
+    $securePassword.Dispose()
+    throw 'The saved Oracle password is empty. Recreate it for CIVENTRA_USER in this Windows account before running the app.'
+}
+$env:CIVENTRA_DB_PASSWORD = $plainPassword
 $port = if ($env:SERVER_PORT) { $env:SERVER_PORT } else { '8081' }
 
 try {
-    & java -jar $jarPath "--server.port=$port"
+    & java -jar $jarPath "--server.port=$port" '--vaadin.productionMode=true' '--civentra.db.h2-fallback-enabled=false'
 } finally {
     $env:CIVENTRA_DB_PASSWORD = $null
     $securePassword.Dispose()

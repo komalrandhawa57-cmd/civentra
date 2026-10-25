@@ -101,8 +101,8 @@ public class UserService {
 
     public User createStaffAccount(String fullName, String email, String phone, String password, String roleName) throws Exception {
         requireRole("ADMIN");
-        if (!"OFFICER".equals(roleName) && !"PROVIDER".equals(roleName)) {
-            throw new IllegalArgumentException("Only officer or provider accounts can be created here.");
+        if (!"OFFICER".equalsIgnoreCase(roleName) && !"PROVIDER".equalsIgnoreCase(roleName) && !"ADMIN".equalsIgnoreCase(roleName)) {
+            throw new IllegalArgumentException("Only Officer, Provider, or Admin accounts can be created here.");
         }
         int roleId = (userDAO != null) ? userDAO.findRoleIdByName(roleName) : 2;
         return register(fullName, email, phone, password, roleId);
@@ -123,15 +123,11 @@ public class UserService {
         }
 
         if (user == null) {
-            user = createDemoUser(email.trim());
-        }
-
-        if (user == null) {
             throw new IllegalArgumentException("Invalid email or password.");
         }
 
         if (!user.isActive())
-            throw new IllegalArgumentException("Account is deactivated. Contact an administrator.");
+            throw new IllegalArgumentException("Invalid email or password.");
 
         String storedHash = user.getPasswordHash();
         boolean passwordValid = false;
@@ -154,15 +150,14 @@ public class UserService {
                 } catch (Exception ex) {
                     log.warn("Password hash upgrade failed for user {}", user.getUserId(), ex);
                 }
-            } else if ("password".equals(password) || "civentra2026".equals(password)) {
-                // demo accounts
-                passwordValid = true;
             }
-        } else if ("password".equals(password) || "civentra2026".equals(password)) {
-            passwordValid = true;
         }
 
         if (!passwordValid) {
+            throw new IllegalArgumentException("Invalid email or password.");
+        }
+
+        if (!isSupportedLoginRole(user.getRoleName())) {
             throw new IllegalArgumentException("Invalid email or password.");
         }
 
@@ -173,49 +168,16 @@ public class UserService {
         return user;
     }
 
-    private User createDemoUser(String identifier) {
-        String clean = identifier.toLowerCase().trim();
-        User u = new User();
-        u.setStatus("ACTIVE");
-        u.setActive(true);
-        u.setPasswordHash("password");
-        u.setPhone("9999999999");
-
-        if (clean.contains("officer")) {
-            u.setUserId(2);
-            u.setEmail("officer@civentra.com");
-            u.setUsername("officer");
-            u.setFullName("Officer Rajesh Sharma");
-            u.setRoleId(2);
-            u.setRoleName("OFFICER");
-            return u;
-        } else if (clean.contains("provider")) {
-            u.setUserId(3);
-            u.setEmail("provider@civentra.com");
-            u.setUsername("provider");
-            u.setFullName("Apex Utilities Corp");
-            u.setRoleId(3);
-            u.setRoleName("PROVIDER");
-            return u;
-        } else if (clean.contains("admin")) {
-            u.setUserId(4);
-            u.setEmail("admin@civentra.com");
-            u.setUsername("admin");
-            u.setFullName("System Administrator");
-            u.setRoleId(4);
-            u.setRoleName("ADMIN");
-            return u;
-        } else if (clean.contains("citizen")) {
-            u.setUserId(1);
-            u.setEmail("citizen@civentra.com");
-            u.setUsername("citizen");
-            u.setFullName("Aarav Patel");
-            u.setRoleId(1);
-            u.setRoleName("CITIZEN");
-            return u;
-        }
-        return null;
+    private boolean isSupportedLoginRole(String roleName) {
+        if (roleName == null) return false;
+        return switch (roleName.trim().toUpperCase(java.util.Locale.ROOT)) {
+            case "CITIZEN", "ROLE_1", "ADMIN", "ADMINISTRATOR", "ROLE_4",
+                    "OFFICER", "MUNICIPAL_OFFICER", "MUNICIPAL OFFICER", "ROLE_2",
+                    "PROVIDER", "SERVICE_PROVIDER", "SERVICE PROVIDER", "ROLE_3" -> true;
+            default -> false;
+        };
     }
+
 
     public List<User> getAllUsers() throws SQLException {
         requireRole("ADMIN");
@@ -261,44 +223,23 @@ public class UserService {
     public User getUserProfile(int userId) throws SQLException {
         requireOwnerOrAdmin(userId);
         if (userDAO == null) {
-            return demoProfileFallback(userId);
+            throw new SQLException("User database access is unavailable.");
         }
-        try {
-            User user = userDAO.findById(userId);
-            if (user == null || !user.isActive()) {
-                User demo = demoProfileFallback(userId);
-                if (demo != null) return demo;
-                throw new SQLException("Active user account was not found.");
-            }
-            return user;
-        } catch (Exception ex) {
-            User demo = demoProfileFallback(userId);
-            if (demo != null) return demo;
-            throw ex;
+        User user = userDAO.findById(userId);
+        if (user == null || !user.isActive()) {
+            throw new SQLException("Active user account was not found.");
         }
+        return user;
     }
 
     public User updateOwnProfile(int userId, String fullName, String phone, String address, String city, String ward) throws Exception {
         requireOwnAccount(userId);
         if (!ValidationUtil.isNotEmpty(fullName)) throw new IllegalArgumentException("Full name is required.");
-        // Soft phone check for demo accounts
-        if (phone != null && !phone.isBlank() && phone.replaceAll("\\D", "").length() >= 10) {
-            // ok
-        } else if (!ValidationUtil.isValidPhone(phone)) {
-            // allow demo shorter numbers only if already logged in demo
-            if (userId > 10) {
-                throw new IllegalArgumentException("Enter a valid 10-digit Indian mobile number.");
-            }
+        if (phone != null && !phone.isBlank() && !ValidationUtil.isValidPhone(phone)) {
+            throw new IllegalArgumentException("Enter a valid 10-digit Indian mobile number.");
         }
 
-        User user;
-        try {
-            user = getUserProfile(userId);
-        } catch (Exception ex) {
-            user = demoProfileFallback(userId);
-            if (user == null) throw ex;
-        }
-
+        User user = getUserProfile(userId);
         user.setFullName(ValidationUtil.sanitize(fullName));
         user.setPhone(phone != null ? phone.trim() : "");
         user.setPhoneNumber(phone != null ? phone.trim() : "");
@@ -306,16 +247,12 @@ public class UserService {
         user.setCity(ValidationUtil.sanitize(city));
         user.setWard(ValidationUtil.sanitize(ward));
 
-        try {
-            if (userDAO != null && !userDAO.updateUser(user)) {
-                // demo-safe continue
-            }
-            if (userDAO != null) {
-                User refreshed = userDAO.findById(userId);
-                if (refreshed != null) user = refreshed;
-            }
-        } catch (Exception ex) {
-            log.warn("updateOwnProfile DB failed (demo-safe): {}", ex.getMessage());
+        if (userDAO != null && !userDAO.updateUser(user)) {
+            throw new SQLException("Profile update failed in database.");
+        }
+        if (userDAO != null) {
+            User refreshed = userDAO.findById(userId);
+            if (refreshed != null) user = refreshed;
         }
 
         if (authenticatedUser != null) {
@@ -330,78 +267,41 @@ public class UserService {
         if (!ValidationUtil.isValidPassword(newPassword)) throw new IllegalArgumentException("New password must be at least 8 characters.");
         if (!newPassword.equals(confirmation)) throw new IllegalArgumentException("New passwords do not match.");
 
-        User user;
-        try {
-            user = getUserProfile(userId);
-        } catch (Exception ex) {
-            user = demoProfileFallback(userId);
-            if (user == null) throw ex;
-        }
+        User user = getUserProfile(userId);
 
         boolean validCurrent = false;
         if (user.getPasswordHash() != null) {
-            if (user.getPasswordHash().startsWith("$2a$") || user.getPasswordHash().startsWith("$2b$") || user.getPasswordHash().startsWith("$2y$")) {
+            if (SecurityUtil.isEncodedPassword(user.getPasswordHash())) {
                 validCurrent = SecurityUtil.verifyPassword(currentPassword, user.getPasswordHash());
             } else {
-                validCurrent = user.getPasswordHash().equals(currentPassword)
-                        || "password".equals(currentPassword)
-                        || "civentra2026".equals(currentPassword);
+                validCurrent = user.getPasswordHash().equals(currentPassword);
             }
-        } else {
-            validCurrent = "password".equals(currentPassword) || "civentra2026".equals(currentPassword);
         }
 
         if (!validCurrent) {
             throw new IllegalArgumentException("Current password is incorrect.");
         }
 
-        try {
-            if (userDAO != null && !userDAO.updatePasswordHash(userId, SecurityUtil.hashPassword(newPassword))) {
-                throw new SQLException("Password was not updated.");
-            }
-        } catch (Exception ex) {
-            // demo accounts: accept success without DB
-            if (userId <= 10) return;
-            throw ex;
+        if (userDAO != null && !userDAO.updatePasswordHash(userId, SecurityUtil.hashPassword(newPassword))) {
+            throw new SQLException("Password was not updated.");
         }
     }
 
-    /**
-     * FIX for ProfileView red error:
-     * updatePassword(int, String) — simple password set (no current-password check)
-     */
     public boolean updatePassword(int userId, String rawPassword) {
-        try {
-            if (rawPassword == null || rawPassword.length() < 4) {
-                throw new IllegalArgumentException("Password must be at least 4 characters.");
-            }
-            // Soft auth — demo must never hard-crash
-            try {
-                requireOwnAccount(userId);
-            } catch (Exception securityEx) {
-                User current = getCurrentUser();
-                if (current == null || current.getUserId() != userId) {
-                    // still allow demo local ids 1-10
-                    if (userId > 10) throw securityEx;
-                }
-            }
-
-            String hash = SecurityUtil.hashPassword(rawPassword);
-            if (userDAO != null) {
-                try {
-                    return userDAO.updatePasswordHash(userId, hash);
-                } catch (Exception ex) {
-                    log.warn("updatePassword DB failed (demo-safe): {}", ex.getMessage());
-                    return userId <= 10; // demo success
-                }
-            }
-            return true;
-        } catch (IllegalArgumentException ex) {
-            throw ex;
-        } catch (Exception ex) {
-            log.warn("updatePassword failed (demo-safe): {}", ex.getMessage());
-            return userId <= 10;
+        if (rawPassword == null || rawPassword.length() < 8) {
+            throw new IllegalArgumentException("Password must be at least 8 characters.");
         }
+        requireOwnAccount(userId);
+        String hash = SecurityUtil.hashPassword(rawPassword);
+        if (userDAO != null) {
+            try {
+                return userDAO.updatePasswordHash(userId, hash);
+            } catch (Exception ex) {
+                log.warn("updatePassword DB failed: {}", ex.getMessage());
+                return false;
+            }
+        }
+        return true;
     }
 
     public boolean updatePassword(long userId, String rawPassword) {
@@ -417,8 +317,7 @@ public class UserService {
             }
         } catch (Exception ignored) {
         }
-        User demo = demoProfileFallback(userId);
-        return Optional.ofNullable(demo);
+        return Optional.empty();
     }
 
     public Optional<User> findById(Long userId) {
@@ -435,20 +334,6 @@ public class UserService {
         } catch (Exception e) {
             return true;
         }
-    }
-
-    private User demoProfileFallback(int userId) {
-        User current = getCurrentUser();
-        if (current != null && current.getUserId() == userId) {
-            return current;
-        }
-        return switch (userId) {
-            case 1 -> createDemoUser("citizen");
-            case 2 -> createDemoUser("officer");
-            case 3 -> createDemoUser("provider");
-            case 4 -> createDemoUser("admin");
-            default -> current;
-        };
     }
 
     private Long requireRole(String... allowedRoles) {

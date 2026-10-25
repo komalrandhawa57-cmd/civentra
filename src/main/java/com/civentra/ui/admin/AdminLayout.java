@@ -21,7 +21,7 @@ import com.vaadin.flow.router.PageTitle;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class AdminLayout extends AppLayout implements com.vaadin.flow.router.BeforeEnterObserver {
+public class AdminLayout extends AppLayout {
     private static final Logger log = LoggerFactory.getLogger(AdminLayout.class);
 
     private final AuthenticatedUser authenticatedUser;
@@ -147,21 +147,4 @@ public class AdminLayout extends AppLayout implements com.vaadin.flow.router.Bef
         viewTitle.setText(title == null || title.isBlank() ? "Admin Console" : title);
     }
 
-    @Override
-    public void beforeEnter(com.vaadin.flow.router.BeforeEnterEvent event) {
-        com.civentra.model.User user = authenticatedUser.getUser();
-        if (user == null) {
-            event.getUI().getPage().setLocation("/login");
-            event.rerouteTo("login");
-        } else if (!"ADMIN".equalsIgnoreCase(user.getRoleName())) {
-            String home = switch (user.getRoleName() == null ? "" : user.getRoleName().toUpperCase(java.util.Locale.ROOT)) {
-                case "OFFICER" -> "officer";
-                case "PROVIDER" -> "provider";
-                case "CITIZEN" -> "citizen";
-                default -> "login";
-            };
-            event.getUI().getPage().setLocation("/" + home);
-            event.rerouteTo(home);
-        }
-    }
 }

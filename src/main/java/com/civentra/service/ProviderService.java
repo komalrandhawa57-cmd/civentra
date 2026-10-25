@@ -108,20 +108,41 @@ public class ProviderService {
     }
 
     public List<ServiceRequestStatusHistory> getRequestHistoryForCitizen(long requestId, long citizenId) {
+        com.civentra.model.User current = requireCurrentUser("CITIZEN", "ADMIN");
+        if (!"ADMIN".equalsIgnoreCase(current.getRoleName()) && current.getUserId() != citizenId) {
+            throw new SecurityException("You may only access history for your own account.");
+        }
         return serviceDAO.findHistoryForCitizen(requestId, citizenId);
     }
 
     public List<ServiceRequestStatusHistory> getRequestHistoryForProvider(long requestId, long providerId) {
+        com.civentra.model.User current = requireCurrentUser("PROVIDER", "ADMIN");
+        if (!"ADMIN".equalsIgnoreCase(current.getRoleName())) {
+            ServiceProvider own = providerDAO.findByUserId((long) current.getUserId())
+                    .orElseThrow(() -> new SecurityException("Provider account required."));
+            if (own.getProviderId() == null || own.getProviderId() != providerId) {
+                throw new SecurityException("You may only access history for your own provider account.");
+            }
+        }
         return serviceDAO.findHistoryForProvider(requestId, providerId);
     }
 
     public List<ServiceRequestStatusHistory> getRequestHistoryForAdmin(long requestId) {
+        requireCurrentUser("ADMIN");
         return serviceDAO.findHistoryForAdmin(requestId);
     }
 
     public long submitServiceEstimate(long requestId, long providerId, String description,
                                      BigDecimal subtotal, BigDecimal tax) {
-        long estimateId = estimateDAO.submit(requestId, providerId, 1L, description, subtotal, tax);
+        com.civentra.model.User current = requireCurrentUser("PROVIDER", "ADMIN");
+        if (!"ADMIN".equalsIgnoreCase(current.getRoleName())) {
+            ServiceProvider own = providerDAO.findByUserId((long) current.getUserId())
+                    .orElseThrow(() -> new SecurityException("Provider account required."));
+            if (own.getProviderId() == null || own.getProviderId() != providerId) {
+                throw new SecurityException("You may only submit estimates for your own provider account.");
+            }
+        }
+        long estimateId = estimateDAO.submit(requestId, providerId, current.getUserId(), description, subtotal, tax);
         try {
             long citizenId = estimateDAO.latestForRequest(requestId)
                     .map(ServiceEstimate::getCitizenId).filter(java.util.Objects::nonNull)
@@ -133,7 +154,8 @@ public class ProviderService {
     }
 
     public void reviewServiceEstimate(long requestId, boolean approve, String remarks) {
-        ServiceEstimate estimate = estimateDAO.review(requestId, 1L, 1L, approve, remarks);
+        com.civentra.model.User current = requireCurrentUser("CITIZEN", "ADMIN");
+        ServiceEstimate estimate = estimateDAO.review(requestId, current.getUserId(), current.getUserId(), approve, remarks);
         try {
             providerDAO.getById(estimate.getProviderId()).map(ServiceProvider::getUserId)
                     .filter(java.util.Objects::nonNull)
@@ -144,6 +166,14 @@ public class ProviderService {
     }
 
     public void updateRequestStatus(long requestId, long providerId, String status, String completionNotes) {
+        com.civentra.model.User current = requireCurrentUser("PROVIDER", "ADMIN");
+        if (!"ADMIN".equalsIgnoreCase(current.getRoleName())) {
+            ServiceProvider own = providerDAO.findByUserId((long) current.getUserId())
+                    .orElseThrow(() -> new SecurityException("Provider account required."));
+            if (own.getProviderId() == null || own.getProviderId() != providerId) {
+                throw new SecurityException("You may only update requests for your own provider account.");
+            }
+        }
         long citizenId = serviceDAO.updateStatusForProvider(requestId, providerId, status, completionNotes);
         try {
             notificationService.notifyServiceRequest(citizenId, requestId, "Service request updated",
@@ -152,6 +182,7 @@ public class ProviderService {
     }
 
     public void verifyRequestCompletion(long requestId, long adminId, boolean approve, String remarks) {
+        requireCurrentUser("ADMIN");
         String targetStatus = approve ? "COMPLETED" : "IN_PROGRESS";
         long citizenId = serviceDAO.verifyCompletion(requestId, targetStatus, adminId, remarks);
 
@@ -162,10 +193,20 @@ public class ProviderService {
         }
 
         try {
-            notificationService.notifyServiceRequest(citizenId, requestId, "Service completion reviewed",
-                    approve ? "The provider's completion report was approved." :
+            notificationService.notifyServiceRequest(citizenId, requestId,
+                    approve ? "Invoice generated" : "Service completion reviewed",
+                    approve ? "A final invoice has been generated from the estimate you approved." :
                             "The completion report was returned to the provider for further work.");
         } catch (Exception ignored) {}
+    }
+
+    private com.civentra.model.User requireCurrentUser(String... allowedRoles) {
+        com.civentra.model.User current = authenticatedUser != null ? authenticatedUser.getUser() : null;
+        if (current == null || !current.isActive() || current.getUserId() <= 0
+                || java.util.Arrays.stream(allowedRoles).noneMatch(role -> role.equalsIgnoreCase(current.getRoleName()))) {
+            throw new SecurityException("An authorized account is required for this action.");
+        }
+        return current;
     }
 
     public Optional<ServiceProvider> getByUserId(int userId) {

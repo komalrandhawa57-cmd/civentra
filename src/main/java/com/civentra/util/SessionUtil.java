@@ -64,8 +64,18 @@ public final class SessionUtil {
             session.setAttribute(SESSION_USER_EMAIL, null);
             session.setAttribute(SESSION_USER_ROLE, null);
             session.setAttribute("user", null);
-            session.getSession().removeAttribute("civentra.user");
-            session.close();
+            session.setAttribute("CIVENTRA_CURRENT_USER", null);
+            try {
+                if (session.getSession() != null) {
+                    session.getSession().removeAttribute("civentra.user");
+                    session.getSession().removeAttribute("CIVENTRA_USER_ID");
+                    session.getSession().removeAttribute("CIVENTRA_USER_ROLE");
+                    session.getSession().invalidate();
+                }
+            } catch (Exception ignored) {}
+            try {
+                session.close();
+            } catch (Exception ignored) {}
         }
     }
 }

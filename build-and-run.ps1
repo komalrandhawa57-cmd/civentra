@@ -23,20 +23,39 @@ foreach ($javaProcess in $javaProcesses) {
     }
 }
 
+$serverPort = if ($env:SERVER_PORT) { [int]$env:SERVER_PORT } else { 8081 }
+$listeners = @()
+try {
+    $listeners = @(Get-NetTCPConnection -LocalPort $serverPort -State Listen -ErrorAction Stop)
+} catch {
+    Write-Warning "Could not check whether port $serverPort is already in use."
+}
+if ($listeners.Count -gt 0) {
+    $ownerIds = ($listeners | Select-Object -ExpandProperty OwningProcess -Unique) -join ', '
+    throw "Port $serverPort is still in use (PID $ownerIds). Stop the existing app with Ctrl+C in its terminal before rebuilding."
+}
+
+$previousMavenOpts = $env:MAVEN_OPTS
+if ([string]::IsNullOrWhiteSpace($env:USERPROFILE)) { throw 'USERPROFILE is not set; Maven cannot locate the Windows user dependency cache.' }
+$mavenUserHomeOption = "-Duser.home=$env:USERPROFILE"
+$env:MAVEN_OPTS = (@($previousMavenOpts, $mavenUserHomeOption) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join ' '
+
 Push-Location $PSScriptRoot
 try {
     Write-Host 'Building CIVENTRA...'
     $mavenSettingsPath = Join-Path $PSScriptRoot 'target\maven-settings.xml'
+    $mavenRepositoryPath = Join-Path $env:USERPROFILE '.m2\repository'
     if (Test-Path -LiteralPath $mavenSettingsPath) {
-        & mvn.cmd -s $mavenSettingsPath '-Dmaven.test.skip=true' package
+        & mvn.cmd -s $mavenSettingsPath "-Dmaven.repo.local=$mavenRepositoryPath" '-Dmaven.test.skip=true' '-Dvaadin.productionMode=true' -Pproduction package
     } else {
-        & mvn.cmd '-Dmaven.test.skip=true' package
+        & mvn.cmd "-Dmaven.repo.local=$mavenRepositoryPath" '-Dmaven.test.skip=true' '-Dvaadin.productionMode=true' -Pproduction package
     }
     if ($LASTEXITCODE -ne 0) {
         throw "Maven build failed with exit code $LASTEXITCODE."
     }
 } finally {
     Pop-Location
+    $env:MAVEN_OPTS = $previousMavenOpts
 }
 
 Write-Host 'Build succeeded. Starting CIVENTRA; press Ctrl+C here to stop it.'

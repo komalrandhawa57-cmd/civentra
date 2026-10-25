@@ -52,7 +52,7 @@ public enum IssueStatus {
             return PENDING;
         }
 
-        return REPORTED;
+        throw new IllegalArgumentException("Unknown issue status: " + input);
     }
 
     public static String toDisplayName(Object input) {

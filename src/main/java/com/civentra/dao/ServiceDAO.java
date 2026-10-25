@@ -359,6 +359,10 @@ public class ServiceDAO {
     }
 
     public static String validateAdminReviewTransition(String currentStatus, String targetStatus) {
+        String current = normalize(currentStatus);
+        if (!"PENDING_VERIFICATION".equals(current)) {
+            throw new IllegalStateException("Only requests pending verification can be reviewed by an administrator.");
+        }
         String next = normalize(targetStatus);
         if ("RETURNED".equals(next) || "REJECTED".equals(next) || "NEEDS_REVISION".equals(next) || "RETURN".equals(next) || "IN_PROGRESS".equals(next)) {
             return "IN_PROGRESS";

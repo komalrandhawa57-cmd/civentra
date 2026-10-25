@@ -51,6 +51,15 @@ public class AuthenticatedUser implements Serializable {
             session.setAttribute(SESSION_KEY, user);
             session.setAttribute("userId", user.getUserId());
             session.setAttribute("role", user.getRoleName());
+            session.setAttribute("user", user);
+            try {
+                if (session.getSession() != null) {
+                    session.getSession().setAttribute("civentra.user", user);
+                    session.getSession().setAttribute("CIVENTRA_USER_ID", (long) user.getUserId());
+                    session.getSession().setAttribute("CIVENTRA_USER_ROLE", user.getRoleName());
+                }
+            } catch (Exception ignored) {
+            }
         }
     }
 
@@ -70,6 +79,16 @@ public class AuthenticatedUser implements Serializable {
             session.setAttribute(SESSION_KEY, null);
             session.setAttribute("userId", null);
             session.setAttribute("role", null);
+            session.setAttribute("user", null);
+            try {
+                if (session.getSession() != null) {
+                    session.getSession().removeAttribute("civentra.user");
+                    session.getSession().removeAttribute("CIVENTRA_USER_ID");
+                    session.getSession().removeAttribute("CIVENTRA_USER_ROLE");
+                    session.getSession().invalidate();
+                }
+            } catch (Exception ignored) {
+            }
             try {
                 session.close();
             } catch (Exception ignored) {
@@ -93,6 +112,21 @@ public class AuthenticatedUser implements Serializable {
 
         Object attr = session.getAttribute(SESSION_KEY);
         if (!(attr instanceof User)) {
+            attr = session.getAttribute("user");
+        }
+        if (!(attr instanceof User) && session.getSession() != null) {
+            try {
+                Object httpUser = session.getSession().getAttribute("civentra.user");
+                if (httpUser instanceof User u) {
+                    attr = u;
+                    session.setAttribute(SESSION_KEY, u);
+                    session.setAttribute("userId", u.getUserId());
+                    session.setAttribute("role", u.getRoleName());
+                    session.setAttribute("user", u);
+                }
+            } catch (Exception ignored) {}
+        }
+        if (!(attr instanceof User)) {
             return null;
         }
 
@@ -105,6 +139,12 @@ public class AuthenticatedUser implements Serializable {
                 if (dbUser != null) {
                     normalizeRole(dbUser);
                     session.setAttribute(SESSION_KEY, dbUser);
+                    session.setAttribute("user", dbUser);
+                    try {
+                        if (session.getSession() != null) {
+                            session.getSession().setAttribute("civentra.user", dbUser);
+                        }
+                    } catch (Exception ignored) {}
                     return dbUser;
                 }
             }
@@ -208,7 +248,7 @@ public class AuthenticatedUser implements Serializable {
     }
 
     public boolean isCitizen() {
-        return hasRole("CITIZEN") || getRoleName().isEmpty();
+        return hasRole("CITIZEN");
     }
 
     // -------------------------------------------------------------------------
@@ -216,7 +256,11 @@ public class AuthenticatedUser implements Serializable {
     // -------------------------------------------------------------------------
 
     private void normalizeRole(User user) {
-        if (user == null || user.getRoleName() == null) {
+        if (user == null) {
+            return;
+        }
+        if (user.getRoleName() == null) {
+            user.setRoleName("UNKNOWN");
             return;
         }
         String r = user.getRoleName().trim().toUpperCase(java.util.Locale.ROOT);
@@ -224,19 +268,27 @@ public class AuthenticatedUser implements Serializable {
             case "MUNICIPAL_OFFICER":
             case "MUNICIPAL OFFICER":
             case "OFFICER":
+            case "ROLE_2":
                 user.setRoleName("OFFICER");
                 break;
             case "SERVICE_PROVIDER":
             case "SERVICE PROVIDER":
             case "PROVIDER":
+            case "ROLE_3":
                 user.setRoleName("PROVIDER");
                 break;
             case "ADMIN":
             case "ADMINISTRATOR":
+            case "ROLE_4":
                 user.setRoleName("ADMIN");
                 break;
-            default:
+            case "CITIZEN":
+            case "ROLE_1":
                 user.setRoleName("CITIZEN");
+                break;
+            default:
+                // Never turn an unrecognized database role into a valid role.
+                user.setRoleName("UNKNOWN");
                 break;
         }
     }

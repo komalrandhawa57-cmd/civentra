@@ -78,13 +78,12 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
                 .set("text-align", "center")
                 .set("font-size", "0.95rem");
 
-        emailField.setPlaceholder("officer@civentra.com");
+        emailField.setPlaceholder("name@example.com");
         emailField.setWidthFull();
         emailField.getStyle().set("--vaadin-input-field-background", "#f8fafc");
 
         passwordField.setPlaceholder("••••••••");
         passwordField.setWidthFull();
-        passwordField.setValue("password");
         passwordField.getStyle().set("--vaadin-input-field-background", "#f8fafc");
 
         loginButton.addThemeVariants(ButtonVariant.LUMO_PRIMARY, ButtonVariant.LUMO_LARGE);
@@ -107,45 +106,7 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
         footer.add(new Span("New to CIVENTRA? "), registerLink);
         footer.getStyle().set("text-align", "center").set("color", "#a78bfa").set("margin-top", "1rem");
 
-        Paragraph demoLabel = new Paragraph("Quick Demo:");
-        demoLabel.getStyle().set("color", "#a78bfa").set("font-size", "0.8rem").set("margin", "1rem 0 0.25rem 0");
-
-        Button officerBtn = new Button("Officer", e -> {
-            emailField.setValue("officer@civentra.com");
-            passwordField.setValue("password");
-            handleLogin();
-        });
-        Button providerBtn = new Button("Provider", e -> {
-            emailField.setValue("provider@civentra.com");
-            passwordField.setValue("password");
-            handleLogin();
-        });
-        Button citizenBtn = new Button("Citizen", e -> {
-            emailField.setValue("citizen@civentra.com");
-            passwordField.setValue("password");
-            handleLogin();
-        });
-        Button adminBtn = new Button("Admin", e -> {
-            emailField.setValue("admin@civentra.com");
-            passwordField.setValue("password");
-            handleLogin();
-        });
-
-        officerBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
-        providerBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
-        citizenBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
-        adminBtn.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_TERTIARY);
-        officerBtn.getStyle().set("color", "#e9d5ff");
-        providerBtn.getStyle().set("color", "#e9d5ff");
-        citizenBtn.getStyle().set("color", "#e9d5ff");
-        adminBtn.getStyle().set("color", "#e9d5ff");
-
-        com.vaadin.flow.component.orderedlayout.HorizontalLayout demos =
-                new com.vaadin.flow.component.orderedlayout.HorizontalLayout(officerBtn, providerBtn, citizenBtn, adminBtn);
-        demos.setWidthFull();
-        demos.setJustifyContentMode(JustifyContentMode.CENTER);
-
-        card.add(icon, title, subtitle, emailField, passwordField, loginButton, demoLabel, demos, footer);
+        card.add(icon, title, subtitle, emailField, passwordField, loginButton, footer);
         add(card);
     }
 
@@ -153,7 +114,9 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
     public void beforeEnter(BeforeEnterEvent event) {
         if (authenticatedUser != null && authenticatedUser.isLoggedIn()) {
             String route = getDashboardRoute(authenticatedUser.getRoleName());
-            UI.getCurrent().getPage().setLocation(route);
+            if (!"login".equals(route)) {
+                event.forwardTo(route);
+            }
         }
     }
 
@@ -180,18 +143,14 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
                 try {
                     user = userService.login(email, password);
                 } catch (IllegalArgumentException ex) {
-                    if (!isDemoEmail(email)) {
-                        showError(ex.getMessage());
-                        resetButton();
-                        return;
-                    }
+                    showError(ex.getMessage());
+                    resetButton();
+                    return;
                 } catch (Exception ex) {
-                    // Fall back to demo user
+                    showError("Unable to sign in right now. Please try again.");
+                    resetButton();
+                    return;
                 }
-            }
-
-            if (user == null && isDemoEmail(email) && ("password".equals(password) || password.isEmpty())) {
-                user = buildDemoUser(email);
             }
 
             if (user == null) {
@@ -213,62 +172,26 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
         }
     }
 
-    private boolean isDemoEmail(String email) {
-        String e = email.toLowerCase();
-        return e.contains("officer@") || e.contains("provider@") || e.contains("admin@") || e.contains("citizen@");
-    }
-
-    private User buildDemoUser(String email) {
-        String e = email.toLowerCase().trim();
-        User u = new User();
-        u.setStatus("ACTIVE");
-        u.setActive(true);
-        u.setPasswordHash("password");
-
-        if (e.contains("officer")) {
-            u.setUserId(2);
-            u.setEmail("officer@civentra.com");
-            u.setUsername("officer");
-            u.setFullName("Officer Rajesh Sharma");
-            u.setRoleId(2);
-            u.setRoleName("OFFICER");
-        } else if (e.contains("provider")) {
-            u.setUserId(3);
-            u.setEmail("provider@civentra.com");
-            u.setUsername("provider");
-            u.setFullName("Apex Utilities Corp");
-            u.setRoleId(3);
-            u.setRoleName("PROVIDER");
-        } else if (e.contains("admin")) {
-            u.setUserId(4);
-            u.setEmail("admin@civentra.com");
-            u.setUsername("admin");
-            u.setFullName("System Administrator");
-            u.setRoleId(4);
-            u.setRoleName("ADMIN");
-        } else {
-            u.setUserId(1);
-            u.setEmail("citizen@civentra.com");
-            u.setUsername("citizen");
-            u.setFullName("Aarav Patel");
-            u.setRoleId(1);
-            u.setRoleName("CITIZEN");
-        }
-        return u;
-    }
-
     private void navigateToDashboard(String role) {
         String route = getDashboardRoute(role);
-        UI.getCurrent().getPage().setLocation(route);
+        if ("login".equals(route)) {
+            showError("Your account has an unsupported role. Please contact an administrator.");
+            resetButton();
+            return;
+        }
+        UI.getCurrent().navigate(route);
     }
 
-    private String getDashboardRoute(String role) {
-        if (role == null) return "citizen";
-        return switch (role.toUpperCase().trim()) {
+    public static String getDashboardRoute(String role) {
+        if (role == null) return "login";
+        return switch (role.toUpperCase(java.util.Locale.ROOT).trim()) {
             case "OFFICER", "MUNICIPAL_OFFICER", "MUNICIPAL OFFICER" -> "officer";
             case "PROVIDER", "SERVICE_PROVIDER", "SERVICE PROVIDER" -> "provider";
-            case "ADMIN", "ADMINISTRATOR" -> "admin";
-            default -> "citizen";
+            case "ROLE_2" -> "officer";
+            case "ROLE_3" -> "provider";
+            case "ADMIN", "ADMINISTRATOR", "ROLE_4" -> "admin";
+            case "CITIZEN", "ROLE_1" -> "citizen";
+            default -> "login";
         };
     }
 

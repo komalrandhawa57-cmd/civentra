@@ -11,11 +11,13 @@ import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
+import jakarta.annotation.security.RolesAllowed;
 
 import java.util.Map;
 
 @Route(value = "admin", layout = MainLayout.class)
 @PageTitle("Admin — CIVENTRA")
+@RolesAllowed("ADMIN")
 public class AdminDashboard extends VerticalLayout {
     public AdminDashboard(UserService userService, AnalyticsDAO analyticsDAO) {
         addClassNames("civ-page", "civ-role-page");

@@ -19,14 +19,12 @@ import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.textfield.TextField;
-import com.vaadin.flow.router.BeforeEnterEvent;
-import com.vaadin.flow.router.BeforeEnterObserver;
 import com.vaadin.flow.server.VaadinSession;
 
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
-public class MainLayout extends AppLayout implements BeforeEnterObserver {
+public class MainLayout extends AppLayout {
 
     private final AuthenticatedUser authenticatedUser;
     private final NotificationService notificationService;
@@ -328,36 +326,4 @@ public class MainLayout extends AppLayout implements BeforeEnterObserver {
         try { return authenticatedUser.getUser(); } catch (Exception e) { return null; }
     }
 
-    @Override
-    public void beforeEnter(BeforeEnterEvent event) {
-        User user = authenticatedUser.getUser();
-        if (user == null) {
-            event.getUI().getPage().setLocation("/login");
-            event.rerouteTo("login");
-            return;
-        }
-
-        String path = event.getLocation().getPath().toLowerCase(java.util.Locale.ROOT);
-        String role = user.getRoleName() == null ? "" : user.getRoleName().toUpperCase(java.util.Locale.ROOT);
-
-        boolean allowed = switch (path) {
-            case "admin", "admin/issues", "admin/categories", "admin/users", "admin/providers", "admin/analytics", "admin/assignments", "admin/service-requests" -> "ADMIN".equals(role);
-            case "officer" -> "OFFICER".equals(role) || "ADMIN".equals(role);
-            case "provider" -> "PROVIDER".equals(role) || "ADMIN".equals(role);
-            case "profile" -> java.util.Set.of("ADMIN", "OFFICER", "PROVIDER", "CITIZEN").contains(role);
-            case "citizen", "citizen/report-issue", "citizen/my-issues", "citizen/find-services", "citizen/service-requests", "citizen/bills", "citizen/my-bills", "citizen/community-map", "citizen/map", "citizen/ai-assistant", "citizen/ai", "citizen/notifications" -> "CITIZEN".equals(role) || "ADMIN".equals(role) || "OFFICER".equals(role) || "PROVIDER".equals(role);
-            default -> path.isBlank();
-        };
-
-        if (!allowed) {
-            String home = switch (role) {
-                case "ADMIN" -> "admin";
-                case "OFFICER" -> "officer";
-                case "PROVIDER" -> "provider";
-                default -> "citizen";
-            };
-            event.getUI().getPage().setLocation("/" + home);
-            event.rerouteTo(home);
-        }
-    }
 }

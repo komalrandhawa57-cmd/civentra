@@ -17,12 +17,29 @@ import com.vaadin.flow.component.textfield.EmailField;
 import com.vaadin.flow.component.textfield.PasswordField;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.router.PageTitle;
+import com.vaadin.flow.router.BeforeEnterEvent;
+import com.vaadin.flow.router.BeforeEnterObserver;
 import com.vaadin.flow.router.Route;
+import com.vaadin.flow.server.auth.AnonymousAllowed;
+import com.civentra.security.AuthenticatedUser;
+import org.springframework.beans.factory.annotation.Autowired;
 
 @Route("register")
 @PageTitle("Create account — CIVENTRA")
-public class RegisterView extends VerticalLayout {
+@AnonymousAllowed
+public class RegisterView extends VerticalLayout implements BeforeEnterObserver {
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(RegisterView.class);
+
+    @Autowired(required = false)
+    private AuthenticatedUser authenticatedUser;
+
+    @Override
+    public void beforeEnter(BeforeEnterEvent event) {
+        if (authenticatedUser != null && authenticatedUser.isLoggedIn()) {
+            String route = LoginView.getDashboardRoute(authenticatedUser.getRoleName());
+            event.forwardTo(route);
+        }
+    }
 
     public RegisterView(UserService userService) {
         addClassName("civ-login-page");

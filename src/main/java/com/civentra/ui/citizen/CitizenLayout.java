@@ -10,13 +10,10 @@ import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.sidenav.SideNav;
 import com.vaadin.flow.component.sidenav.SideNavItem;
-import com.vaadin.flow.router.BeforeEnterEvent;
-import com.vaadin.flow.router.BeforeEnterObserver;
 import com.vaadin.flow.server.VaadinSession;
-import com.civentra.model.User;
 import com.civentra.security.AuthenticatedUser;
 
-public class CitizenLayout extends AppLayout implements BeforeEnterObserver {
+public class CitizenLayout extends AppLayout {
     private final AuthenticatedUser authenticatedUser;
 
     public CitizenLayout(AuthenticatedUser authenticatedUser) {
@@ -30,12 +27,7 @@ public class CitizenLayout extends AppLayout implements BeforeEnterObserver {
         title.getStyle().set("font-size", "18px").set("margin", "0").set("color", "#FFE7B1");
 
         Button logout = new Button("Logout", VaadinIcon.SIGN_OUT.create(), event -> {
-            VaadinSession session = VaadinSession.getCurrent();
-            if (session != null) {
-                session.setAttribute("user", null);
-                session.getSession().removeAttribute("civentra.user");
-                session.close();
-            }
+            authenticatedUser.logout();
             getUI().ifPresent(ui -> ui.getPage().setLocation("/login"));
         });
         logout.addThemeVariants(ButtonVariant.LUMO_ERROR);
@@ -68,27 +60,4 @@ public class CitizenLayout extends AppLayout implements BeforeEnterObserver {
         return nav;
     }
 
-    @Override
-    public void beforeEnter(BeforeEnterEvent event) {
-        User user = authenticatedUser.getUser();
-        if (user == null) {
-            event.getUI().getPage().setLocation("/login");
-            event.rerouteTo("login");
-            return;
-        }
-        String role = user.getRoleName() == null ? "" : user.getRoleName().toUpperCase(java.util.Locale.ROOT);
-        String path = event.getLocation().getPath().toLowerCase(java.util.Locale.ROOT);
-        boolean allowed = ("CITIZEN".equals(role) || "ADMIN".equals(role))
-                && !("citizen/my-issues".equals(path) && !"CITIZEN".equals(role));
-        if (!allowed) {
-            String home = switch (role) {
-                case "ADMIN" -> "admin";
-                case "OFFICER" -> "officer";
-                case "PROVIDER" -> "provider";
-                default -> "login";
-            };
-            event.getUI().getPage().setLocation("/" + home);
-            event.rerouteTo(home);
-        }
-    }
 }

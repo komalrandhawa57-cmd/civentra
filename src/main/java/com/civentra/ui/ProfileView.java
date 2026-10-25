@@ -16,9 +16,11 @@ import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.server.VaadinSession;
+import jakarta.annotation.security.RolesAllowed;
 
 @Route(value = "profile", layout = MainLayout.class)
 @PageTitle("Profile & Settings — CIVENTRA")
+@RolesAllowed({ "CITIZEN", "OFFICER", "PROVIDER", "ADMIN" })
 public class ProfileView extends VerticalLayout {
 
     private final UserService userService;
@@ -98,8 +100,7 @@ public class ProfileView extends VerticalLayout {
         currentPassword.setWidthFull();
         newPassword.setWidthFull();
         confirmPassword.setWidthFull();
-        currentPassword.setHelperText("Demo login default: password");
-        newPassword.setMinLength(4);
+        newPassword.setMinLength(8);
 
         Button change = new Button("Update password", e -> changePassword());
         change.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
@@ -181,17 +182,10 @@ public class ProfileView extends VerticalLayout {
             Notification.show("Profile saved successfully.")
                     .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
         } catch (Exception ex) {
-            currentUser.setFullName(name.getValue());
-            currentUser.setPhone(phone.getValue());
-            currentUser.setPhoneNumber(phone.getValue());
-            currentUser.setAddress(address.getValue());
-            currentUser.setCity(city.getValue());
-            currentUser.setWard(ward.getValue());
-
-            if (authenticatedUser != null) authenticatedUser.login(currentUser);
-
-            Notification.show("Profile saved (demo mode).")
-                    .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+            String msg = ex instanceof IllegalArgumentException && ex.getMessage() != null
+                    ? ex.getMessage() : "Could not save profile. Please try again.";
+            Notification.show(msg)
+                    .addThemeVariants(NotificationVariant.LUMO_ERROR);
         }
     }
 
@@ -205,8 +199,8 @@ public class ProfileView extends VerticalLayout {
             if (cur != null && !cur.isBlank()) {
                 userService.changeOwnPassword(currentUser.getUserId(), cur, p1, p2);
             } else {
-                if (p1 == null || p1.length() < 4) {
-                    Notification.show("Password must be at least 4 characters.")
+                if (p1 == null || p1.length() < 8) {
+                    Notification.show("Password must be at least 8 characters.")
                             .addThemeVariants(NotificationVariant.LUMO_WARNING);
                     return;
                 }
@@ -227,8 +221,10 @@ public class ProfileView extends VerticalLayout {
             currentPassword.clear();
             newPassword.clear();
             confirmPassword.clear();
-            Notification.show("Password updated (demo mode).")
-                    .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+            String msg = ex instanceof IllegalArgumentException && ex.getMessage() != null
+                    ? ex.getMessage() : "Password could not be updated. Check your current password.";
+            Notification.show(msg)
+                    .addThemeVariants(NotificationVariant.LUMO_ERROR);
         }
     }
 

@@ -67,7 +67,7 @@ public class AnalyticsDAO {
 
     public int getIssueCount(LocalDate from, LocalDate to) {
         DateRange range = dateRange(from, to);
-        return count("SELECT COUNT(*) FROM COMMUNITY_ISSUES WHERE CREATED_AT >= ? AND CREATED_AT < ?", range);
+        return count("SELECT COUNT(*) FROM COMMUNITY_ISSUES WHERE REPORTED_AT >= ? AND REPORTED_AT < ?", range);
     }
 
     public int getResolvedCount() {

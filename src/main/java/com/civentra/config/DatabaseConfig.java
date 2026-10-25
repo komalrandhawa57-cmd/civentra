@@ -21,11 +21,14 @@ public class DatabaseConfig {
     @Value("${civentra.db.username:CIVENTRA_USER}")
     private String dbUsername;
 
-    @Value("${civentra.db.password:civentra2026}")
+    @Value("${civentra.db.password:}")
     private String dbPassword;
 
     @Value("${civentra.db.pool.size:10}")
     private int poolSize;
+
+    @Value("${civentra.db.h2-fallback-enabled:true}")
+    private boolean h2FallbackEnabled;
 
     private static volatile DataSource activeDataSource;
 
@@ -51,6 +54,9 @@ public class DatabaseConfig {
             config.setInitializationFailTimeout(2000L);
             ds = new HikariDataSource(config);
         } catch (Exception e) {
+            if (!h2FallbackEnabled) {
+                throw new IllegalStateException("CIVENTRA could not connect to Oracle and H2 fallback is disabled for this run.", e);
+            }
             System.err.println("CIVENTRA: Primary database connection failed. Falling back to H2 in-memory mode: " + e.getMessage());
             HikariConfig fallbackConfig = new HikariConfig();
             fallbackConfig.setJdbcUrl("jdbc:h2:mem:civentradb;DB_CLOSE_DELAY=-1;MODE=Oracle");

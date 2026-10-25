@@ -19,6 +19,7 @@ import com.vaadin.flow.component.textfield.PasswordField;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.server.VaadinSession;
+import jakarta.annotation.security.RolesAllowed;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -26,6 +27,7 @@ import java.util.Locale;
 
 @Route(value = "admin/users", layout = MainLayout.class)
 @PageTitle("Users — CIVENTRA")
+@RolesAllowed({ "ADMIN", "OFFICER" })
 public class UserManagementView extends VerticalLayout {
     private final UserService userService;
     private final List<User> users = new ArrayList<>();
@@ -77,19 +79,21 @@ public class UserManagementView extends VerticalLayout {
         phone.setPlaceholder("10-digit Indian mobile number");
         phone.setWidthFull();
         ComboBox<String> role = new ComboBox<>("Account role");
-        role.setItems("OFFICER", "PROVIDER");
+        role.setItems("OFFICER", "PROVIDER", "ADMIN");
         role.setValue("OFFICER");
         role.setWidthFull();
         PasswordField password = new PasswordField("Temporary password");
         password.setMinLength(8);
         password.setWidthFull();
-        Paragraph note = new Paragraph("Use a real staff member’s details. The temporary password is stored as a BCrypt hash; CIVENTRA cannot show it later.");
+        Paragraph note = new Paragraph(
+                "Use a real staff member’s details. The temporary password is stored as a BCrypt hash; CIVENTRA cannot show it later.");
         Button cancel = new Button("Cancel", e -> dialog.close());
         Button create = new Button("Create account");
         create.addClickListener(e -> {
             create.setEnabled(false);
             try {
-                userService.createStaffAccount(name.getValue(), email.getValue(), phone.getValue(), password.getValue(), role.getValue());
+                userService.createStaffAccount(name.getValue(), email.getValue(), phone.getValue(), password.getValue(),
+                        role.getValue());
                 Notification.show(role.getValue() + " account created and activated.")
                         .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
                 dialog.close();
@@ -97,7 +101,8 @@ public class UserManagementView extends VerticalLayout {
             } catch (Exception ex) {
                 create.setEnabled(true);
                 String message = ex instanceof IllegalArgumentException && ex.getMessage() != null
-                        ? ex.getMessage() : "Could not create the staff account right now.";
+                        ? ex.getMessage()
+                        : "Could not create the staff account right now.";
                 Notification.show(message)
                         .addThemeVariants(NotificationVariant.LUMO_ERROR);
             }
@@ -112,7 +117,8 @@ public class UserManagementView extends VerticalLayout {
         try {
             users.clear();
             List<User> loaded = userService.getAllUsers();
-            if (loaded != null) users.addAll(loaded);
+            if (loaded != null)
+                users.addAll(loaded);
             renderUsers();
         } catch (Exception ex) {
             userList.removeAll();
@@ -126,14 +132,16 @@ public class UserManagementView extends VerticalLayout {
         String role = roleFilter.getValue();
         String active = activeFilter.getValue();
         List<User> filtered = users.stream().filter(user -> {
-            String text = (safe(user.getFullName()) + " " + safe(user.getEmail()) + " " + safe(user.getWard())).toLowerCase(Locale.ROOT);
+            String text = (safe(user.getFullName()) + " " + safe(user.getEmail()) + " " + safe(user.getWard()))
+                    .toLowerCase(Locale.ROOT);
             return (query.isBlank() || text.contains(query))
                     && (role == null || "All Roles".equals(role) || role.equalsIgnoreCase(user.getRoleName()))
                     && (active == null || "All Accounts".equals(active)
-                        || ("Active".equals(active) == user.isActive()));
+                            || ("Active".equals(active) == user.isActive()));
         }).toList();
         if (filtered.isEmpty()) {
-            userList.add(new Paragraph(users.isEmpty() ? "No user accounts found." : "No accounts match these filters."));
+            userList.add(
+                    new Paragraph(users.isEmpty() ? "No user accounts found." : "No accounts match these filters."));
             return;
         }
         filtered.forEach(user -> userList.add(userRow(user)));
@@ -145,7 +153,8 @@ public class UserManagementView extends VerticalLayout {
         Div avatar = new Div();
         avatar.addClassName("civ-user-avatar");
         avatar.setText(user.getFullName() == null || user.getFullName().isBlank()
-                ? "?" : user.getFullName().substring(0, 1).toUpperCase(Locale.ROOT));
+                ? "?"
+                : user.getFullName().substring(0, 1).toUpperCase(Locale.ROOT));
         Div copy = new Div();
         H3 name = new H3(safe(user.getFullName()));
         Span email = new Span(safe(user.getEmail()));
@@ -163,7 +172,8 @@ public class UserManagementView extends VerticalLayout {
                     Notification.show(user.isActive() ? "Account deactivated." : "Account activated.")
                             .addThemeVariants(NotificationVariant.LUMO_SUCCESS);
                     loadUsers();
-                } else Notification.show("Account status was not changed.");
+                } else
+                    Notification.show("Account status was not changed.");
             } catch (Exception ex) {
                 Notification.show("Could not update account status. Check the database connection and try again.")
                         .addThemeVariants(NotificationVariant.LUMO_ERROR);
@@ -173,6 +183,11 @@ public class UserManagementView extends VerticalLayout {
         return row;
     }
 
-    private String safe(String value) { return value == null ? "" : value; }
-    private String safe(String value, String fallback) { return value == null || value.isBlank() ? fallback : value; }
+    private String safe(String value) {
+        return value == null ? "" : value;
+    }
+
+    private String safe(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
+    }
 }
