@@ -93,6 +93,7 @@ class UserServiceTest {
     void validLoginVerifiesEncodedPassword() throws Exception {
         User account = new User();
         account.setUserId(7);
+        account.setRoleName("CITIZEN");
         account.setActive(true);
         account.setPasswordHash(SecurityUtil.hashPassword("SafePass123"));
         when(userDAO.findByEmail("citizen@example.com")).thenReturn(account);

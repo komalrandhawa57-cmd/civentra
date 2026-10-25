@@ -17,12 +17,7 @@ public class DatabaseInitializer {
 
     @PostConstruct
     public void initSchema() {
-        // 1. Ensure all accounts in USERS table are set to ACTIVE
-        try {
-            jdbc.execute("UPDATE USERS SET STATUS = 'ACTIVE'");
-        } catch (Exception ignored) {}
-
-        // 2. Create ALL required Sequences in Oracle DB
+        // Create ALL required Sequences in Oracle DB without changing account status.
         String[] sequences = {
             "ISSUE_SEQ", "SEQ_COMMUNITY_ISSUES", "COMMUNITY_ISSUE_SEQ",
             "SERVICE_REQUEST_SEQ", "SEQ_SERVICE_REQUESTS", "SERVICE_REQUESTS_SEQ",
@@ -277,8 +272,9 @@ public class DatabaseInitializer {
                     + "TOTAL_PRICE NUMBER(10,2) DEFAULT 0)");
         } catch (Exception ignored) {}
 
-        // 13. Seed Demo Data so Citizen pages are never blank
-        seedDemoDataForCitizens();
+        // Do not insert demo issues, invoices, service requests, or notifications into
+        // the configured database. Existing and newly registered accounts start with
+        // only the records users actually create.
     }
 
     private void seedDemoDataForCitizens() {
